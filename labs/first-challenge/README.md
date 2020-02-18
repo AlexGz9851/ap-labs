@@ -36,21 +36,21 @@ Note that the answer must be a substring, `pwke` is a subsequence and not a subs
 Build Requirements
 ------------------
 ```
-# Build Requirements here
+This program doesn't need any special build requirements.
 ```
 
 
 How to build
 ------------
 ```
-# instructions here
+gcc firstCodeChallenge.c -o firstCodeChallenge.o
 ```
 
 
 How to Run
 ----------
 ```
-# instructions here
+./firstCodeChallenge.o
 ```
 
 
