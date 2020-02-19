@@ -3,13 +3,9 @@
 
 
 int reverse(int c){
-    //printf("c%d\n",c);
-    if(c==10) return 0; //NL
-    if(c==-1) return 1;//EOF
-    int x = getchar();
-    int answer = reverse(x);
-    printf("%c\0",(char)c);//here happens
-    //fflush(stdin);
+    if(c=='\n'|| c==EOF) return c==EOF;
+    int answer = reverse(getchar());
+    printf("%c",(char)c);
     return answer;
 }
 
