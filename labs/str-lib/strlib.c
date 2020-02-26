@@ -15,7 +15,7 @@ int mystrfind(char *origin, char *substr){
     int found = 1;
     int lenOr = mystrlen(origin);
     int lenS = mystrlen(substr);
-    if(lenOr < lenS) return 1;
+    if(lenOr < lenS) return 0;
     for(int i=0; i<lenOr+1-lenS;i++){
         found = 1;
         for(int j=0;j<lenS;j++){
@@ -24,9 +24,9 @@ int mystrfind(char *origin, char *substr){
                 break;
             }
         }
-        if(found)return 0;
+        if(found)return 1;
     }
-    return 1;
+    return 0;
 }
 
 char *mystradd(char *origin, char *addition){
@@ -50,5 +50,5 @@ char *mystradd(char *origin, char *addition){
 int main(int argc, char** argv){
     printf("len %d\n",mystrlen(mystradd(argv[1], argv[2])));
     printf("%s\n",mystradd(argv[1], argv[2]));
-    printf("%s\n", mystrfind(argv[1], argv[2])<0?"No":"Yes");
+    printf("%s\n", mystrfind(argv[1], argv[2])?"Yes":"No");
 }
