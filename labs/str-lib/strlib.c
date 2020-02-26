@@ -16,7 +16,7 @@ int mystrfind(char *origin, char *substr){
     int lenOr = mystrlen(origin);
     int lenS = mystrlen(substr);
     if(lenOr < lenS) return 0;
-   for(int i=0; i<lenOr+1-lenS;i++){
+    for(int i=0; i<lenOr+1-lenS;i++){
         found = 1;
         for(int j=0;j<lenS;j++){
             if(substr[j]!=origin[j+i]){
