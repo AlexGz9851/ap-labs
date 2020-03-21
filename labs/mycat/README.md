@@ -13,6 +13,18 @@ General instructions
 3. Use the `cat2.c` file for your code.
 4. Have fun and don't forget the [next section](#how-to-submit-your-work).
 
+Run Metrics
+--------------------
+1. Compile cat2.c using:
+'''bash
+gcc cat2.c -o mycat
+'''
+2. Run the shell script:
+ '''bash
+ ./metrics.sh fileToAnalize
+'''
+3. This command will generate a file called metrics.txt
+
 How to submit your work
 =======================
 ```
