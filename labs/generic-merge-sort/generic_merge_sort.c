@@ -87,7 +87,7 @@ int main(int argc, char** argv){
     }
     if(argc>1){
         merge_sort((void *)argv, numeric? 2 : 1, argc-1, (int(*)(void *, void *)) numeric ? numcmp:strcmp);
-        for(int i=2;i<argc;i++){
+        for(int i=(numeric? 2 : 1);i<argc;i++){
             printf("%s ", argv[i]);
         }printf("\n"); 
     }   
