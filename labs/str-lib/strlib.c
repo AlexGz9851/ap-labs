@@ -47,8 +47,3 @@ char *mystradd(char *origin, char *addition){
     return result;
 }
 
-int main(int argc, char** argv){
-    printf("len %d\n",mystrlen(mystradd(argv[1], argv[2])));
-    printf("%s\n",mystradd(argv[1], argv[2]));
-    printf("%s\n", mystrfind(argv[1], argv[2])?"Yes":"No");
-}
