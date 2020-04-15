@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #define RESET 0
 #define BRIGHT 1
@@ -39,6 +40,7 @@ int infof(const char *format, ...){
     textcolor(RESET,  WHITE, RESET_BG);
     vprintf(format, valist);
     textcolor(RESET,  WHITE, RESET_BG);
+    fflush(stdout);
     va_end(valist);
 
 }
@@ -49,6 +51,7 @@ int warnf(const char *format, ...){
     textcolor(ITALICS, YELLOW, RESET_BG);
     vprintf(format, valist);
     textcolor(RESET,  WHITE, RESET_BG);
+    fflush(stdout);
     va_end(valist);
 }
 
@@ -58,6 +61,7 @@ int errorf(const char *format, ...){
     textcolor(BRIGHT, RED, RESET_BG);
     vprintf(format, valist);
     textcolor(RESET,  WHITE, RESET_BG);
+    fflush(stdout);
     va_end(valist);
 }
 
@@ -67,5 +71,7 @@ int panicf(const char *format, ...){
     textcolor(BLINK, WHITE, RED);
     vprintf(format, valist);
     textcolor(RESET,  WHITE, RESET_BG);
+    fflush(stdout);
     va_end(valist);
+    raise(SIGABRT);
 }
