@@ -14,15 +14,13 @@ package main
 
 import (
 	"fmt"
+	"flag"
 	"log"
 	"os"
 
 	"gopl.io/ch5/links"
 )
 
-//!+sema
-// tokens is a counting semaphore used to
-// enforce a limit of 20 concurrent requests.
 var tokens = make(chan struct{}, 20)
 
 func crawl(url string) []string {
@@ -37,31 +35,41 @@ func crawl(url string) []string {
 	return list
 }
 
-//!-sema
+var seen = make(map[string]bool)
 
-//!+
-func main() {
-	worklist := make(chan []string)
-	var n int // number of pending sends to worklist
-
-	// Start with the command-line arguments.
-	n++
-	go func() { worklist <- os.Args[1:] }()
-
-	// Crawl the web concurrently.
-	seen := make(map[string]bool)
-	for ; n > 0; n-- {
-		list := <-worklist
-		for _, link := range list {
-			if !seen[link] {
-				seen[link] = true
-				n++
-				go func(link string) {
-					worklist <- crawl(link)
-				}(link)
-			}
-		}
+func crawlDepth(depth int, url string, done chan bool){
+	if(depth==0){
+		done <- true
+		return
 	}
+	visited, ok := seen[url]
+	if visited && ok {
+		done <- true
+		return
+	}else{
+		seen[url] = true
+	}
+
+	links := crawl(url)
+	linksDone := make(chan bool)
+	for _, link := range links {
+		go crawlDepth(depth-1, link, linksDone)
+		<-linksDone
+	}
+	done <- true
 }
 
-//!-
+func main() {
+	
+	depth := flag.Int("depth", 1, "Sets the depth of the url crawling.")
+	flag.Parse()
+	if len(os.Args) != 3{
+		fmt.Println("Wrong number of arguments. Aboerted.")
+		return
+	}
+	url := os.Args[2]
+	done := make(chan bool)
+	seen[url] = false
+	go crawlDepth(*depth, url, done)
+	<-done
+}
