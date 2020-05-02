@@ -11,20 +11,35 @@ import (
 	"log"
 	"net"
 	"os"
+	"fmt"
+	"flag"
+	"math/rand"
 )
 
 //!+
 func main() {
-	conn, err := net.Dial("tcp", "localhost:8000")
+	var random = rand.Intn(1000)
+	var randomUser = fmt.Sprintf("%s%d", "user" , random)
+	var user = flag.String("user", randomUser, "Sets username.")
+	var server = flag.String("server", "localhost:8000","Sets the ip:port of the server.")
+	flag.Parse()
+	conn, err := net.Dial("tcp", *server)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	done := make(chan struct{})
+	var setUserComm = fmt.Sprintf("%s%s%s", "/setUser " , *user,"\n" )
+	
+	if _, err := io.WriteString(conn, setUserComm); err != nil {
+		log.Fatal(err)
+	}
 	go func() {
 		io.Copy(os.Stdout, conn) // NOTE: ignoring errors
-		log.Println("done")
+		//log.Println("done")
 		done <- struct{}{} // signal the main goroutine
 	}()
+
 	mustCopy(conn, os.Stdin)
 	conn.Close()
 	<-done // wait for background goroutine to finish
