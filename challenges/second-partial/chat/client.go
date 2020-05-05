@@ -13,15 +13,16 @@ import (
 	"os"
 	"fmt"
 	"flag"
-	"math/rand"
+	"bufio"
+	"strings"
 )
+
+var user = flag.String("user", "randomUser", "Sets username.")
+var server = flag.String("server", "localhost:8000","Sets the ip:port of the server.")
 
 //!+
 func main() {
-	var random = rand.Intn(1000)
-	var randomUser = fmt.Sprintf("%s%d", "user" , random)
-	var user = flag.String("user", randomUser, "Sets username.")
-	var server = flag.String("server", "localhost:8000","Sets the ip:port of the server.")
+
 	flag.Parse()
 	conn, err := net.Dial("tcp", *server)
 	if err != nil {
@@ -29,14 +30,22 @@ func main() {
 	}
 
 	done := make(chan struct{})
-	var setUserComm = fmt.Sprintf("%s%s%s", "/setUser " , *user,"\n" )
+	var setUserComm = fmt.Sprintf("/setUser %s\n" , *user )
 	
 	if _, err := io.WriteString(conn, setUserComm); err != nil {
 		log.Fatal(err)
 	}
 	go func() {
+		input := bufio.NewScanner(conn)
+		for input.Scan() {
+			toPrint := input.Text()
+			if toPrintArr:= strings.Split(toPrint, ":"); toPrintArr[0] !=*user{
+				fmt.Print("\n")		
+			}
+			fmt.Print(input.Text())
+			fmt.Print("\n"+*user + "> ")
+		}
 		io.Copy(os.Stdout, conn) // NOTE: ignoring errors
-		//log.Println("done")
 		done <- struct{}{} // signal the main goroutine
 	}()
 
@@ -48,7 +57,17 @@ func main() {
 //!-
 
 func mustCopy(dst io.Writer, src io.Reader) {
-	if _, err := io.Copy(dst, src); err != nil {
-		log.Fatal(err)
+	// writing
+	output := bufio.NewScanner(src)
+	for output.Scan() {
+		if output.Text() == "" {
+			fmt.Print(*user + "> ")
+			continue
+		}
+		_, e := io.WriteString(dst, output.Text()+"\n")
+		if e != nil {
+			fmt.Printf("Connection closed\n")
+			return
+		}
 	}
 }

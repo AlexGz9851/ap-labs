@@ -14,6 +14,7 @@ import (
 	"net"
 	"flag"
 	"strings"
+	"time"
 )
 
 var usernames map[string]string
@@ -37,34 +38,17 @@ func broadcaster() {
 	for {
 		select {
 		case msg := <-messages:
-			// Broadcast incoming message to all
-			// clients' outgoing message channels.
+			// Broadcast incoming message to all clients' outgoing message channels.
 			for cli := range clients {
 				cli <- msg
 			}
 		case msg := <-priv:
-			//search in all users till get the correct one
 			// command0 origin, command1 dest, command[2:] message
 			command := strings.Split(msg, " ")
-			for username, cli := range usernameClient {
-				if(username == command[1]){
-					privMsg := command[0]+ " (priv to you): "
-					for i:=2;i<len(command); i++{
-						privMsg = privMsg + " " + command[i]
-					}
-					cli <- privMsg
-				}else if(username == command[0]){
-					privMsg := "(you sent priv a to "+command[1]+"): "
-					for i:=2;i<len(command); i++{
-						privMsg = privMsg + " " + command[i]
-					}
-					cli <- privMsg
-				}
-				
-			}
+			usernameClient[command[1]] <-  command[0]+ " (priv to you): "+strings.Join(command[2:], " ")
+			usernameClient[command[0]] <- "(you sent priv a to "+command[1]+"): " +strings.Join(command[2:], " ")
 		case cli := <-entering:
 			clients[cli] = true
-
 		case cli := <-leaving:
 			close(cli)
 			delete(clients, cli)
@@ -82,89 +66,128 @@ func handleConn(conn net.Conn) {
 	who := conn.RemoteAddr().String()
 
 	input := bufio.NewScanner(conn)
+	//Scanning for messages from client.
 	for input.Scan() {
 		text  := input.Text()
 		if len(text)==0 { continue }
-		if text[0]!='/' {
+		if text[0]!='/' { //Not a command.
 			messages <- usernames[who] + ": " + text
 			continue
 		}
-		command := strings.Split(text, " ")
-		switch command[0]{
-		case "/setUser":
-			if usernames[who] != "" { break } 
-			usernames[who] = command[len(command)-1]
-			inverseUsernames[usernames[who] ] = who
-			usernameClient[usernames[who]] = ch
-			sendMsgFromServer("You are " +  usernames[who]  ,ch)
-			sendMsgFromServer(usernames[who] + " has arrived.", messages)
-			entering <- ch
-			if(len(usernames)==1){
-				setAdmin(usernames[who], ch, messages )
-			}
-		case "/user":
-			for  i := 1;i<len(command);i++{
-				v, found := inverseUsernames[command[i]] 
-				if found {
-					msg := "user: "+ command[i] +", address: "+v
-					sendMsgFromServer(msg ,ch)
-				}
-			}
-		case "/msg":
-			privMsg := usernames[who]
-			for i:=1;i<len(command); i++{
-				privMsg = privMsg + " " + command[i]
-			}
-			priv <- privMsg
-		case "/users":
-			for k,v :=  range inverseUsernames{
-				msg:= "user: "+ k +", address: "+v
-				sendMsgFromServer(msg ,ch)
-			}
-		case "/kick":
-			if(usernames[who] == admin){
-				for i:=1;i<len(command);i++{
-					if command[i]== usernames[who] { continue }
-					for user, _:= range usernameClient{
-						if(command[i] != user){ continue }
-						sendMsgFromServer(user+" was kicked",messages)
-						sendMsgFromServer("You were kicked",usernameClient[user])
-						//kick(user)
-					}
-				}
-			}else{
-				sendMsgFromServer("You cannot /kick anyone.You are not ADMIN." ,ch)
-			}
-		default:
-			messages <- usernames[who] + ": " + text
-		}
+		//Command case.
+		commandEvaluation(text, who, ch)
 	}
-	sendMsgFromServer(usernames[who]  + " has left" ,messages)
+
+	//User is desconected or  was kicked.
 	leaving <- ch
+	if usernames[who] !=""{
+		sendMsgFromServer(usernames[who]  + " has left" ,messages)
+	}
 	delete(inverseUsernames, usernames[who] )
 	delete(usernameClient, usernames[who] )
+
 	if admin ==  usernames[who] {
-		if len(inverseUsernames)>0{
-			for k,_ := range inverseUsernames {
-				setAdmin(k, usernameClient[k], messages )
-				break //we just need one user to be the admin, choosen "randomly" by the first in this for.
-			}
-		}else{
-			admin= ""
-		}
+		replaceAdmin()
 	}
-	addressConnection[who].Close()
+
+	if addressConnection[who] != nil {
+		//User was not kicked, it left by itself and it should be disconnected.
+		fmt.Printf("irc-server> [%s] left.\n", usernames[who])
+		addressConnection[who].Close()
+	}
+
 	delete(usernames, who);
 	delete(addressConnection, who)
+}
+
+func replaceAdmin(){
+	if len(inverseUsernames)<=0{
+		admin= ""
+		return
+	}
+	for k,_ := range inverseUsernames {
+		setAdmin(k, usernameClient[k], messages )
+		return //we just need one user to be the admin, choosen "randomly" by the first in this for.
+	}
+}
+
+func commandEvaluation( text string,cliAddr string, ch chan <- string){
+	command := strings.Split(text, " ")
+	switch command[0]{
+	case "/setUser":
+		if usernames[cliAddr ] != "" { return } /*This is for avoiding rechange your name once connected.
+												This command is just an inner command for set username initially.*/
+		setNewUser(command[len(command)-1], cliAddr ,  ch)
+		entering <- ch
+		if(len(usernames)==1){
+			sendMsgFromServer("Congrats, you were the first user.",ch)
+			setAdmin(usernames[cliAddr], ch, messages )
+		}
+	case "/user":
+		for  i := 1;i<len(command);i++{		 
+			if v, found := inverseUsernames[command[i]]; found {
+				sendMsgFromServer("user: "+ command[i] +", address: "+v,ch)
+			}
+		}
+	case "/msg":
+		privMsg := usernames[cliAddr] +" "+ strings.Join(command[1:], " ")
+		priv <- privMsg
+	case "/users":
+		msg:= "List of users: -- "
+		for k,_ :=  range inverseUsernames{
+			msg = msg + k +" -- "
+		}
+		sendMsgFromServer(msg,ch)
+	case "/kick":
+		if usernames[cliAddr] != admin {
+			sendMsgFromServer("You cannot /kick anyone.You are not ADMIN." ,ch)
+			return
+		}
+		for i:=1;i<len(command);i++{
+			userToKick := command[i]
+			if userToKick == usernames[cliAddr] { continue } //you cannot kick yourself.
+			if _, found:= usernameClient[userToKick]; !found  { continue} // you cannot kick someone already kicked.
+			kick(userToKick)
+		}
+	case "/time":
+		msg:= "Local Time: "+ time.Now().Location().String() + " " +time.Now().Format("15:04 GMT-07")
+		sendMsgFromServer(msg ,ch)
+	default:
+		messages <- usernames[cliAddr] + ": " + text
+	}
+}
+
+func setNewUser(user, cliAddr  string,  ch chan <- string ){
+	usernames[cliAddr ] = user
+	inverseUsernames[user ] = cliAddr 
+	usernameClient[user] = ch
+	sendMsgFromServer("You: [" +  usernames[cliAddr] +"] are succesfully logged."  ,ch)
+	fmt.Printf("irc-server> New connected user [%s].\n", usernames[cliAddr])
+	sendMsgFromServer("[" + usernames[cliAddr] + "] has arrived.", messages)
+}
+
+func kick( user string){
+	sendMsgFromServer("You were kicked\n",usernameClient[user])
+	//leaving <- usernameClient[user]
+	sendMsgFromServer(user+" was kicked",messages)
+	fmt.Printf("irc-server> [%s] was kicked.\n", user)
+	delete(usernameClient, user )
+	delete(usernames, inverseUsernames[user]);
+	addressConnection[inverseUsernames[user]].Close()
+	delete(addressConnection, inverseUsernames[user])
+	delete(inverseUsernames, user)
 }
 
 func setAdmin(ad string, ch chan <- string, messages chan <- string ){
 	admin=  ad
 	sendMsgFromServer(admin + " is now the ADMIN.", messages)
+	fmt.Printf("irc-server> [%s] was promoted as the channel ADMIN.\n", admin)
 }
 
 func sendMsgFromServer(msg string,ch chan <- string){
-	ch <- "server> "+msg
+	if ch!= nil{
+		ch <- "irc-server> "+msg
+	}
 }
 
 func clientWriter(conn net.Conn, ch <-chan string) {
@@ -174,13 +197,6 @@ func clientWriter(conn net.Conn, ch <-chan string) {
 }
 
 //!-handleConn
-func initVars(){
-	usernames = make(map[string]string)
-	inverseUsernames = make(map[string]string)
-	usernameClient = make(map[string]client)
-	addressConnection= make(map[string]net.Conn)
-	admin = ""
-}
 
 //!+main
 func main() {
@@ -189,7 +205,7 @@ func main() {
 	flag.Parse()
 	var serverLocation = fmt.Sprintf("%s:%s", *host , *port)
 	listener, err := net.Listen("tcp", serverLocation)
-	initVars()
+	initVars(*host, *port)
 
 	if err != nil {
 		log.Fatal(err)
@@ -205,6 +221,16 @@ func main() {
 		addressConnection[conn.RemoteAddr().String()] = conn
 		go handleConn(conn)
 	}
+}
+
+func initVars(host, port string){
+	usernames = make(map[string]string)
+	inverseUsernames = make(map[string]string)
+	usernameClient = make(map[string]client)
+	addressConnection= make(map[string]net.Conn)
+	admin = ""
+	fmt.Printf("irc-server>  Simple IRC Server started at %s:%s\n",host, port)
+	fmt.Println("irc-server> Ready for receiving new clients.")
 }
 
 //!-main
