@@ -14,9 +14,7 @@ import (
 	"fmt"
 	"flag"
 	"bufio"
-	"strings"
 )
-
 var user = flag.String("user", "randomUser", "Sets username.")
 var server = flag.String("server", "localhost:8000","Sets the ip:port of the server.")
 
@@ -38,17 +36,14 @@ func main() {
 	go func() {
 		input := bufio.NewScanner(conn)
 		for input.Scan() {
-			toPrint := input.Text()
-			if toPrintArr:= strings.Split(toPrint, ":"); toPrintArr[0] !=*user{
-				fmt.Print("\n")		
-			}
+			fmt.Print("\n")		
 			fmt.Print(input.Text())
 			fmt.Print("\n"+*user + "> ")
 		}
 		io.Copy(os.Stdout, conn) // NOTE: ignoring errors
 		done <- struct{}{} // signal the main goroutine
 	}()
-
+	
 	mustCopy(conn, os.Stdin)
 	conn.Close()
 	<-done // wait for background goroutine to finish

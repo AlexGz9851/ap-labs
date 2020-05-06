@@ -167,8 +167,8 @@ func setNewUser(user, cliAddr  string,  ch chan <- string ){
 }
 
 func kick( user string){
-	sendMsgFromServer("You were kicked\n",usernameClient[user])
-	//leaving <- usernameClient[user]
+	sendMsgFromServer("You were kicked",usernameClient[user])
+	sendMsgFromServer("For bad behaviour\n",usernameClient[user])
 	sendMsgFromServer(user+" was kicked",messages)
 	fmt.Printf("irc-server> [%s] was kicked.\n", user)
 	delete(usernameClient, user )
@@ -186,7 +186,7 @@ func setAdmin(ad string, ch chan <- string, messages chan <- string ){
 
 func sendMsgFromServer(msg string,ch chan <- string){
 	if ch!= nil{
-		ch <- "irc-server> "+msg
+		ch <- "irc-server: "+msg
 	}
 }
 
