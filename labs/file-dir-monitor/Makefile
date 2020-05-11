@@ -12,4 +12,4 @@ $(TARGET) : $(OBJFILES)
 clean:
 	rm -f $(OBJFILES) $(TARGET) *~
 
-include ../common.mk
+include ../../common.mk
