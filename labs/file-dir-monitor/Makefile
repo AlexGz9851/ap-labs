@@ -1,7 +1,7 @@
 CC       = gcc
 CFLAGS   = -Wall
 LDFLAGS  =
-OBJFILES = logger.o monitor.o
+OBJFILES = logger.o monitor.o hashtable.o
 TARGET   = monitor
 
 all: $(TARGET)

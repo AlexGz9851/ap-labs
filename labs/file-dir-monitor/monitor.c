@@ -1,197 +1,76 @@
 #include <stdio.h>
-#include <errno.h>
-#include "logger.h"
+#include <stdlib.h>
+#include <ftw.h>
 #include <sys/inotify.h>
 #include <string.h>
-#include <poll.h>
-#include <unistd.h>
-#include <stdlib.h>
+#include "logger.h"
+#include "hashtable.h"
 
-#define WAIT_WRITE 2
-#define WRITE_ACTION 1
-#define NO_WRITE 0
-static void handle_events(int fd, int * wd, int argc, char *argv[]);
-
-char renamed_file[4096];
-char rename_file_status=WRITE_ACTION;
-
-static void handle_events(int fd, int * wd, int argc, char *argv[]){
-	char _Alignas(struct inotify_event) buf[4096];
-	const struct inotify_event *event;
-	size_t len;
-	char *ptr;
-
-	
-	/* Loop while events can be read from inotify file descriptor. */
-	
-	for (;;) {
-		/* Read some events. */
-		
-		len = read(fd, buf, sizeof buf);
-		if (len == -1 && errno != EAGAIN) {
-			errorf("There was some error trying to read the inotify events.\n");
-			return;
-		}
-		/* If the nonblocking read() found no events to read, then 
-		it returns -1 with errno set to EAGAIN. In that case,
-		we exit the loop. */
-
-		if (len <= 0)
-			break;
-
-		/* Loop over all events in the buffer */
-
-		for (ptr = buf; ptr < buf + len; 
-			ptr += sizeof(struct inotify_event) + event->len) {
-		
-			event = (const struct inotify_event *) ptr;
-
-			/* Print event type */
-            //infof("operation> %d\n", event->mask);
-			if (event->mask & IN_CREATE){
-				//TODO LOG in create FILE.
-				infof("Created: \n");
-				rename_file_status=WRITE_ACTION;
-			}else if (event->mask & IN_DELETE){
-				//TODO LOG in delete  FILE.
-				infof("Deleted: \n");
-				rename_file_status=WRITE_ACTION;
-			}else if (event->mask & IN_MOVED_FROM){
-				//TODO LOG TO rename file FILE.
-				rename_file_status=WAIT_WRITE;
-				strcpy(renamed_file, event->name);
-			}else if (event->mask & IN_MOVED_TO){
-				//TODO LOG TO rename file FILE.
-				if(rename_file_status==WAIT_WRITE){
-					if(strlen(renamed_file)!=NO_WRITE){
-						infof("Renamed from: %s to: \n", renamed_file);
-					}else{
-						infof("Renamed to: \n");
-					}
-					renamed_file[0]=0;
-					rename_file_status=WRITE_ACTION;
-				}else{
-					rename_file_status=NO_WRITE;
-					continue;
-				}
-			}else{
-                rename_file_status=NO_WRITE;
-            }
-			if(rename_file_status==WRITE_ACTION){
-				/* Print the name of the watched directory */
-				for (int i = 1; i < argc; ++i) {
-					if (wd[i] == event->wd) {
-						infof("%s/", argv[i]);
-						break;
-					}
-	    			}
-		
-				/* Print the name of the file */
-				if (event->len)
-					infof("%s", event->name);
-				
-				/* Print type of filesystem object */
-		
-				if (event->mask & IN_ISDIR)
-					infof(" [directory]\n");
-				else	
-					infof(" [file]\n");
-			}
-
-		}
-	}
-}
-int main(int argc, char ** argv){
-	
-	char buf;
-	int fd, poll_num;
-	int *wd;
-	nfds_t nfds;
-	struct pollfd fds[2];
-
-	renamed_file[0]=0;
-	if(argc!=2){
-		errorf("Number of attributes incorrect. Aborting.\n");
-		return -1;		
-	}
-    infof("codes: increate %d indelete %d inmovedfrom %d inmovedto %d\n",IN_CREATE ,IN_DELETE , IN_MOVED_FROM,IN_MOVED_TO);
-
-	fd = inotify_init1(IN_NONBLOCK);
-	if (fd == -1) {
-		errorf("inotify_init1");
-		return -1;	
-	}
-	
-	/* Allocate memory for watch descriptors */
-
-	wd = calloc(argc, sizeof(int));
-	if (wd == NULL) {
-		errorf("calloc");
-		return -1;
-	}
-
-	/* Mark directories for events
-		- file was opened
-		- file was closed */
+#define BUF_SIZE    ( 1024 * ( ( sizeof (struct inotify_event) ) + 16 ) )
 
 
-	for (int i = 1; i < argc; i++) {
-		wd[i] = inotify_add_watch(fd, argv[i],
-					IN_OPEN | IN_CLOSE);
-		if (wd[i] == -1) {
-			errorf( "Cannot watch '%s': %s\n", argv[i], strerror(errno));
-			return -1;
-		}
-	}
+int addFile(const char *fpath, const struct stat *stats, int typeflag);
+int handleEvent(struct inotify_event *event);
 
-	/* Prepare for polling */
+int inotify;
+char* fileRenamed[2];
 
-	nfds = 2;
-
-	/* Console input */
-
-	fds[0].fd = STDIN_FILENO;
-	fds[0].events = POLLIN;
-
-	/* Inotify input */
-
-	fds[1].fd = fd;
-	fds[1].events = POLLIN;
-
-	/* Wait for events and/or terminal input */
-
-	warnf("Listening for events.\n");
-	while (1) {
-		poll_num = poll(fds, nfds, -1);
-		if (poll_num == -1) {
-			if (errno == EINTR)
-				continue;
-			errorf("poll");
-			return -1;
-		}
-
-		if (poll_num > 0) {
-			if (fds[0].revents & POLLIN) {
-				/* Console input is available. Empty stdin and quit */
-				while (read(STDIN_FILENO, &buf, 1) > 0 && buf != '\n')
-					continue;
-				break;
-			}
-
-			if (fds[1].revents & POLLIN) {
-				/* Inotify events are available */
-				handle_events(fd, wd, argc, argv);
-			}
-		}
-	}
-
-	warnf("Listening for events stopped.\n");
-
-	/* Close inotify file descriptor */
-
-	close(fd);
-	free(wd);
-	return 0;
-	
+int handleEvent(struct inotify_event *event){
+    char *path = getValue(event->wd); 
+    if(event->mask & IN_CREATE && event->mask & IN_ISDIR) {
+        char fileName[strlen(path) + strlen(event->name) + 1];
+        infof("Dir created: \"%s/%s\"\n", path, event->name);
+        strcpy(fileName, path);
+        strcat(fileName, "/");
+        strcat(fileName, event->name);
+        addFile(fileName, NULL, FTW_D);
+    }else if (event->mask & IN_CREATE) {
+        infof("File created: \"%s/%s\"\n", path, event->name);
+    }else if (event->mask & IN_DELETE ) {
+        infof("File deleted: \"%s/%s\"\n", path, event->name);
+        if(event->mask & IN_ISDIR){ inotify_rm_watch(inotify, event->wd); }
+    }else if (event->mask & IN_MOVED_FROM) {
+        fileRenamed[0] = event->name;
+        fileRenamed[1] = path;
+    }else if (event->mask & IN_MOVED_TO) {
+        if(strcmp(fileRenamed[1], path)==0){
+            infof("File \"%s/%s\" was renamed to: \"%s/%s\"\n", path, fileRenamed[0] , path, event->name);
+        }
+        fileRenamed[0] = NULL;
+        fileRenamed[1] = NULL;
+    }
+    return 0;
 }
 
+int addFile(const char *fpath, const struct stat *stats, int typeflag){
+    if(typeflag == FTW_D){
+        int wd = inotify_add_watch( inotify, fpath, IN_CREATE | IN_DELETE | IN_MOVE);
+        addElement(wd, fpath);
+    }
+    return 0; 
+}
+
+
+int main(int argc, char **argv){
+    if(argc != 2){
+        errorf("Error: Needed path as attribute. Aborted.\n");
+        return 1;
+    }
+    inotify = inotify_init();
+    if(ftw(argv[1], addFile, 20 )== -1){
+        errorf("Error trying to monitor the directory. Aborted.\n");
+        return 1;
+    }
+    
+    char buffer[BUF_SIZE];
+    warnf("Listening to path: %s\n", argv[1]);
+    for(;;){
+        int len = read(inotify, buffer, BUF_SIZE);
+        for(int i=0; i < len; ){
+            struct inotify_event *event = ( struct inotify_event * ) &buffer[ i ];     
+            handleEvent(event);
+            i += ( sizeof (struct inotify_event) ) + event->len;
+        }
+    }
+    return 0;
+}
