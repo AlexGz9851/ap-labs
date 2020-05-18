@@ -1,0 +1,4 @@
+Ping pong in goroutines
+Total times the ball cross the net: 21094809
+Time elapsed: 8 (secs)
+Average of number of hits the ball got in a second: 2636851

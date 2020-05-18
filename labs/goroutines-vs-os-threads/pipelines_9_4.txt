@@ -1,0 +1,9 @@
+Pipeline analysis:
+It took 6 seconds to travel 10000000 pipelines to the dummy object.
+The total of memory consumed  by this process was: 
+	Mem Alloc : 294 MiB
+	Current Mallocs : 1168326
+	HeapInUse : 298MiB
+	Memoria en sistema: 1467MiB
+
+Note: the process ran out of stack when it was tested with 20000000 goroutines.
