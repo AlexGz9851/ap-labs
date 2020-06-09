@@ -15,3 +15,5 @@ val: build
 
 valng: buildng
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out2.txt ./test
+
+include ../../common.mk
